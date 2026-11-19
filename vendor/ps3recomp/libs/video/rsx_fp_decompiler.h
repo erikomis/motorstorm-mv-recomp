@@ -13,6 +13,7 @@
 #define PS3RECOMP_RSX_FP_DECOMPILER_H
 
 #include "ps3emu/ps3types.h"
+#include "rsx_depth_sample.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -100,6 +101,9 @@ float rsx_fp_alpha_ref(u32 raw, u32 surface_color_format);
  *                   and a.xy sampling. Pass 0 for the legacy all-2D behavior
  *                   (rsx_fp_decompile forwards 0, so its output is unchanged
  *                   byte-for-byte).
+ *                   Bit 16+N set => unit N is a 3D volume: declared
+ *                   `Texture3D` and sampled with a.xyz (TXP divides all
+ *                   three by w). A unit may not be both cube and 3D.
  *
  * The mask must match what the backend actually binds: a cube unit needs a
  * TextureCube SRV at register tN, and a 2D unit a Texture2D SRV. See the
@@ -117,6 +121,19 @@ int rsx_fp_decompile_buffered_ex(
     char* out, u32 out_size, u32* out_constant_count,
     rsx_fp_constant_block* out_constants);
 
+/* Texture units the program reads (TEX/TXP/TXB/TXL/TXD and the BEM forms). */
+u32 rsx_fp_texture_units(const u8* ucode, u32 max_bytes);
+
+/* Buffered variant with native D24 depth units (rsx_depth_sample.h). Units
+ * with native_depth[u].enabled are declared individually and read through
+ * generated _rsx_depthN helpers: SampleCmpLevelZero with a comparison sampler
+ * at s<u> when the view compares, else the depth value. Returns -1 when a
+ * native unit is also a cube or is read with TXB/TXL. */
+int rsx_fp_decompile_buffered_native_depth(
+    const u8* ucode, u32 max_bytes, u32 ctrl, u32 tex_cube_mask,
+    const rsx_depth_sample_view native_depth[16], char* out, u32 out_size,
+    u32* out_constant_count, rsx_fp_constant_block* out_constants);
+
 /* Extract the exact runtime inline-CONST payload. Returns the slot count on
  * success or -1 for an unterminated/truncated/oversized program. */
 int rsx_fp_collect_constants(
@@ -128,6 +145,12 @@ int rsx_fp_collect_constants(
 /* Zero inline constants only for buffered-HLSL prefetch identity. */
 u32 rsx_fp_canonical_program(const u8* ucode,u32 max_bytes,u8* out,u32 capacity);
 u64 rsx_fp_structural_hash(const u8* ucode, u32 max_bytes, u64 seed);
+/* The same hash, plus the program's byte length (instructions and inline
+ * CONST slots up to and including PROGRAM_END) in one walk. *out_size is the
+ * value rsx_fp_program_size returns whenever the hash is nonzero, and 0 when
+ * the hash is 0. */
+u64 rsx_fp_structural_hash_sized(const u8* ucode, u32 max_bytes, u64 seed,
+                                 u32* out_size);
 
 /* Hash the exact legacy HLSL literal spellings (%g) for a program while also
  * retaining structural identity. This is intended for aggregate diagnostics;

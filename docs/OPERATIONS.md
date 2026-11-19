@@ -80,6 +80,48 @@ hide mechanism was not traced, and this run does not verify menu or race renderi
 
 Inherited probes are cleared; development SPU_PM_INTERP=1 remains. Six known pre-menu wedge probes are zeroed: SPU_WP, SPU_PM_GATE_TRACE, SPU_PM_RETIRE_GUARD, SPU_PM_PC_RESUME, SPU_PM_FLOW_RESUME, SPU_PM_YIELD_RESUME. Probe-off boots both clean/instrumented menus; individual guilty knob is not isolated. FLOW_FSDBG=1 correlated with early resourcesystem 938 fatal and is omitted. Hooks alone were exonerated for this pre-menu wedge, not permanent stability.
 
+## Runtime profile admission (issue 149)
+
+The default `--execution-profile baseline-interpreter` retains that curated
+environment. Admission requires the selected EXE's adjacent `build_identity.json`,
+matching EXE and configured ELF hashes, selected runtime source and recorded
+capabilities. Older builds without capabilities must be rebuilt. Capabilities
+are never inferred from a later source checkout. An unsupported baseline fails
+before run retention, output creation, PAD replay or process creation.
+
+For a deliberate trial of a runtime without the curated policy interpreter:
+
+```powershell
+python scripts/run.py --executable 'build/separate/ms1_recomp.exe' --execution-profile toolkit-default --seconds 60
+```
+
+`toolkit-default` omits the curated interpreter and resume/probe switches; inherited
+SPU/FLOW diagnostics are still cleared. It requires explicit selection even if
+the baseline is unsupported. `launch.json` and `final.json` retain the selected
+profile, exact profile environment, matching build record and EXE/ELF identities.
+The recorded build source includes its capability-source hash and, for a toolkit
+Git checkout, revision and dirty status. These records identify the selected
+build; they do not prove all possible source capabilities or execution parity.
+
+This selection starts a fresh runtime baseline. It is not an API-only comparison
+with an earlier curated D3D12 build. Renderer comparisons need matching runtime,
+CPU/SPU/input profiles, build conditions and observations on both renderers.
+Vulkan host integration remains under #146; this tooling change launches no
+Vulkan trial and establishes no original assets, race entry or 30 FPS result.
+
+`python scripts/check_runtime_profile.py` uses authored inert identities and
+intercepts native compilation/process creation while executing the real build
+and launcher entry points. It requires Python 3.10+ and `psutil` from
+`requirements.txt`. Add `--historical-runtime PATH` to verify actual
+`runtime/spu/spu_channels.c` from own-fork commit
+`39a36296511c445707adabcd312f0b740cfbd694` (Git blob
+`506da3f99dbfa7576dda3d0d53d9d859643e54fb`): the unsupported default must
+reject before launch and explicit toolkit-default must record the selection.
+`--fetch-historical` fetches only that file at the pinned commit (CI uses it on
+Linux and Windows). Without that source, only this optional historical check is
+skipped, and the skip is reported. No game
+inputs or original instructions are used by either check.
+
 CPU surface dependency diagnostics use `scripts/run.py --profile-cpu-surfaces`.
 This explicitly enables and records the existing `RSX_CPU_SURFACE_PROFILE=1`
 backend diagnostics after inherited RSX settings are cleared. Each completed
@@ -109,7 +151,37 @@ regression in `scripts/check_menu_replay.py` covers transient/permanent sharing,
 revocation during the delay, and a real Windows handle without delete sharing.
 This does not explain the separate historical replay-ownership failure.
 
-Continuation profiles must include screen-gated intro skips in `optional_actions`.
+### Native menu boot
+
+Supported debug-US builds enable the identity-checked startup policy by default.
+The policy accepts the configured selected language through its original handler,
+closes the first opening-video request at verified caller addresses, and lets the
+original finished-video transition perform menu initialization, profile saving,
+background-video start and music setup. Background and later movie requests retain
+the original path. This changes startup workflow under the owner direction in #323.
+
+`--original-intro` selects reference startup. Build `--no-menu-boot` omits the binding.
+Other target identities retain original startup. Launch metadata records the selected
+`MS_BOOT_MENU` value and the selected executable's `menu_boot` capability.
+
+Menu-start replay profiles declare `"startup": "menu"` and begin at PLAY.
+Original-start profiles declare `"startup": "original"` or omit the field.
+The launcher checks profile mode against selected build/runtime mode before launch.
+Continue the subsequent menus through the existing observed-screen gates.
+Authored tests cover caller identity, one-time selection, callback completion,
+original mode, background forwarding and eight compiled negative controls.
+Owned muted run `20261117T040309.228124Z` verified this policy at source
+`6c42e97eac5b8dc4c0b418ba35b8307410614f3b`, EXE
+`20dd52eaee7c66cdf0540f34d43b379f3ac51b9d419a222c1657b068fb0342bd`.
+It reached the inspected PLAY menu with zero required/optional replay inputs and
+no PAD_FILE press receipts. Both native startup markers and the `gui_d.m2v`
+background open were present. The owned target guard closed at 34.406 seconds.
+This verifies startup behavior. Race graphics, interpreter removal and minimum
+30 FPS remain open. Private receipt is
+`temp/menu-boot-evidence/20261117T040309.228124Z/analysis.json`.
+
+Reference runs selected with `--original-intro` use continuation profiles with
+screen-gated intro skips in `optional_actions`.
 Each uses the same observed reference/ROI/label/button/polls as a required step,
 plus `after_step` (the number of required steps already acknowledged). An action
 sends once when observed; an absent intro does not block the route. The target
@@ -317,6 +389,12 @@ remain private; CI uploads authored-test logs/JSON only.
 
 For the default-off fingerprint-owned job experiment, pass `--native-owned-jobs` to [run.py](../scripts/run.py). The launcher clears inherited SPU flags, explicitly selects and records `SPU_NATIVE_OWNED_JOBS=1`, and retains required policy interpretation. Environment inheritance alone does not select this mode.
 
+Pass `--jobmod-dispatch-log` to select and record `SPU_JOBMOD_DISPATCH_LOG=1` (default off; diagnostic). `spu_indirect_branch` then logs the first 16 and every 64th transfer per worker into a claimed job span that a lift serves, as `[pm-jobmod] DISPATCH ... resolver=lift`. Transfers the resolver misses (`resolver=MISS->interp`) always log. With lift hits logged, a MotorStorm race writes about 875,000 of these lines, and the SPU threads wait on stderr and the C runtime's stream lock. Any value other than unset, `0` or `1` aborts. [check_spu_native_owned.py](../scripts/check_spu_native_owned.py) covers the switch.
+
+Pass `--jobmod-header-fnv` as well to select and record `SPU_JOBMOD_HEADER_FNV=1` (default off). The staging matcher then also identifies a job image by the span its C0DEC0DE header declares (image minus the 0x20 trailer), once per burst. Without it, a job the policy module loads with tail padding never matches its registered identity and runs interpreted; the MP3 job objects (ids 217/218) are loaded this way. A header match logs `[pm-jobmod] header identity`. [check_spu_jobmod_identity.py](../scripts/check_spu_jobmod_identity.py) covers the matcher with authored images.
+
+Pass `--pm-native-services` with `--native-owned-jobs` to select and record `SPU_PM_NATIVE_SVC=1` (default off). Native jobs call job manager services with `bisl` into the policy module's text, and under policy interpretation those services otherwise run in the interpreter. [spu_pm_services.cpp](../src/motorstorm/spu_pm_services.cpp) registers MotorStorm's job manager entries and the LS code ranges they reach. A call from compiled job code runs the lifted service while those ranges in LS equal the pristine text, copied from guest memory and checked against its fingerprint; the ranges stay admitted to the owned gate until the call's bracket ends, and every other owned-gate condition still applies. A LS mismatch logs `[pm-svc] LS ... differs` and that call stays interpreted. `SPU_PM_SVC_VERIFY=1` (diagnostic, set by hand) instead runs each call interpreted while recording its channel operations and their LS effects, replays the lifted service on a private context and LS fed those results, and logs `[pm-svc] VERIFY MISMATCH` if the operations, registers, pc or LS differ. [check_spu_pm_services.py](../scripts/check_spu_pm_services.py) covers admission, scope and the verifier with authored guest code.
+
 ### Persistent DX12 texture cache
 
 `--texture-retention 0|1` explicitly selects the reference or bounded persistent
@@ -326,6 +404,46 @@ The target counts owned default texture and upload allocation footprints, not
 all driver memory or physical VRAM residency. Indispensable live batch pins may
 exceed it; `[TEXRESIDENCY]` reports this overage with `--profile-textures`.
 A zero target retains required batch resources until genuine GPU retirement.
+
+`--texture-mips 0|1` (`RSX_TEX_MIPS`, default `0`) uploads the mip levels
+SET_TEXTURE_FORMAT declares below level 0 for 2D and cube textures, clamped to
+the halvings the dimensions allow; volumes keep one level. Each (face, level)
+is decoded at its own size and layout and copied to its own subresource, and
+the identity covers every uploaded level. `[RSXTEXMIP]` names the first chained
+uploads and their class. Linear (LN) chains assume lower levels packed at their
+own width; that rule has no hardware cross-check yet. Game-free coverage:
+[check_rsx_texture_mips.py](../scripts/check_rsx_texture_mips.py); D3D12
+readback and per-level sampling: `check_rsx_texture_gpu.py` phase `mips-only`.
+
+`--surface-prefetch 0|1` (default `0`) sets `RSX_CPU_SURFACE_PREFETCH` to
+MotorStorm's three race feedback surfaces: the 2048x2048 deformation surface
+(`01A80500`), a 1280x720 surface the game probes at varying points
+(`00A80500`) and the 64x64 HDR exposure target (`02A30480`). Reads stay
+coherent: each still returns the surface as of every write submitted before
+it. After a submitted batch that wrote a listed surface the CPU has read since
+its last copy, the renderer queues a copy behind that batch; a read that needs
+exactly that generation packs it, waiting only for that copy's fence, instead
+of fencing all submitted work and copying anew. Any other read takes the
+ordinary copy. The launcher clears an inherited list and records the
+selection. `RSX_CPU_SURFACE_PREFETCH_LOG=1` prints used, waited, missed and
+copy counts. Game-free coverage:
+[check_cpu_surface_prefetch.py](../scripts/check_cpu_surface_prefetch.py).
+
+`--eager-surface-submit 0|1` (default `0`) sets `RSX_CPU_SURFACE_EAGER` to
+MotorStorm's 64x64 HDR exposure target (`02A30480`). The main thread reads it
+once per race frame, 10-20 ms after the renderer records the draws that write
+it. Without the switch the batch holding those draws is submitted only when the
+read arrives (or at the frame end), so the read waits for the renderer to
+replay it and the GPU to run it. With it, the renderer submits the batch at the
+first draw boundary after those draws whose draw no longer targets a listed
+surface, or at its idle pump, through the same nonpresenting capacity path as
+the early submission for pending reads. Reads stay coherent: each still needs
+the surface's current generation; only the submission point moves. With
+`--surface-prefetch 1` the copy queued behind that batch usually holds the
+generation the read needs. The launcher clears an inherited list and records
+the selection. `RSX_CPU_SURFACE_PROFILE=1` also prints `[CPUSURFACE_EAGER]`
+submit counts. Game-free coverage:
+[check_cpu_surface_eager.py](../scripts/check_cpu_surface_eager.py).
 
 Use identical cache targets, validation and profiling settings for comparisons.
 Retention validates every uploaded face with full XXH3; the reference retains

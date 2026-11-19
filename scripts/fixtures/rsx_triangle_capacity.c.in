@@ -1,6 +1,7 @@
 /* Production callbacks/record layout; authored storage and submission adapters. */
 #include "rsx_commands.h"
 #include "rsx_primitives.h"
+#include "rsx_env_once.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,14 +10,21 @@
 #endif
 #define MAX_VERTICES 393216
 #define VP_VERT_STRIDE 256
+/* rsx_d3d12_guest_sampler.h needs the D3D12 headers; the record only needs
+ * its register layout. */
+#include "rsx_depth_sample.h"
+typedef struct { u32 address, filter, control0, border; } rsx_guest_sampler_regs;
 @RECORD@
-static struct { int pipeline_ready,tex_bound,merge_prev_draw; void *vb_mapped,*vp_root_sig,*vp_vb_mapped; u32 vb_offset,vp_vb_offset,draw_count,merge_first_end,vp_parity; rsx_state* current_rsx_state; D3D12DrawRecord draws[MAX_DRAWS]; struct {u32 off,raw,w,h,fmt,ctrl1,cube,mips;int set;} cur_texs[4]; } s_d3d;
+/* Sampler-state merge rules are exercised by check_rsx_sampler_tables.py. */
+static int guest_sampler_matches(const D3D12DrawRecord* dr){(void)dr;return 1;}
+static struct { int pipeline_ready,tex_bound,merge_prev_draw; void *vb_mapped,*vp_root_sig,*vp_vb_mapped; u32 vb_offset,vp_vb_offset,draw_count,merge_first_end,vp_parity; rsx_state* current_rsx_state; D3D12DrawRecord draws[MAX_DRAWS]; struct {u32 off,raw,w,h,fmt,ctrl1,cube,mips,depth;int set;} cur_texs[4]; } s_d3d;
 static unsigned vertices[8192], output[8192], output_n, drains, cb_calls;
 static void submit(void) { for(u32 d=0;d<s_d3d.draw_count;d++){D3D12DrawRecord*r=&s_d3d.draws[d]; if(!r->is_vp)continue; for(u32 v=0;v<r->vertex_count/3*3;v++) output[output_n++]=vertices[r->vb_byte_offset/256+v];} s_d3d.draw_count=0;s_d3d.vp_vb_offset=0;s_d3d.vp_parity^=1; }
 static void ensure_draw_record_capacity(void){if(s_d3d.draw_count==MAX_DRAWS){drains++;submit();}}
 static u32 rsx_record_color_masks(const rsx_state*s){return s?s->color_mask:0;}
 static u32 rsx_blend_key(const rsx_state*s,int b){(void)s;return b;}
 static u32 rsx_cull_key(const rsx_state*s){(void)s;return 0;}
+static u64 rsx_polygon_offset_key(const rsx_state*s){(void)s;return 0;}
 static int vp_get_vs(const rsx_state*s){(void)s;return 0;}
 static void vp_record_cb(u32 i,int vs,D3D12DrawRecord*r){(void)i;(void)vs;(void)r;cb_calls++;}
 static u32 current_rt_off(u32*w,u32*h,u32*m){*w=*h=1;memset(m,0,12);return 0;}

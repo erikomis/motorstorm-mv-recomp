@@ -1,5 +1,426 @@
 # Vendor provenance and upstream
 
+## Native policy-module services (#327)
+
+Own-fork branch `codex/pm-native-services` carries the reusable runtime and
+authored differential fixtures through `20245d30`. Game-specific registration
+stays in this repository. The default-off `SPU_PM_NATIVE_SVC=1` switch admits a
+registered service only for a `bisl r0` from a resident job with both the call
+and its continuation in that job's span. The registered LS code ranges must
+match the pristine text published through an interlocked cache state. The
+drain closes the service scope when the call bracket ends.
+
+The opt-in `SPU_PM_SVC_VERIFY=1` path compares the interpreted service with a
+private compiled replay. The authored fixture builds the actual interpreter,
+drain and owned gate with lifter-emitted calls and service bodies. It checks
+full GPR/LS/status parity in eleven modes and rejects nine compiled mutants,
+including a jump at the purported call site. The fixture uses authored bytes.
+
+## Coherent surface prefetch (#322)
+
+The reusable implementation and authored validation are own-fork modular and
+combined commit `9a5efceeeec9dcb13047af799dda176fa2147edf` in
+`robbe1912/ps3recomp`. All eight modular workflows, including SDK validation on
+Windows, Linux and macOS, passed. Existing toolkit snapshot requests and their
+owned FIFO boundaries remain intact. The shared fence/prefetch block is carried
+selectively into this byte-read consumer.
+
+CPU reads continue through the coherent renderer handler. Reuse requires the
+exact current GPU generation and resource/guest layout. Missing or superseded
+copies follow the coherent copy path. Prefetch copies have their own command
+allocator/list and real completion fence. Resource retirement waits before
+untracking, and device-removal sentinels or incomplete waits stop visibly.
+The bounded hex parser rejects malformed, overflowing and duplicate offsets.
+
+The production-body model passes thirteen compiled mutants on Windows/Linux.
+The full-backend authored GPU fixture passes on actual WARP and hardware,
+covering feature-off/on byte equality, current generation reuse, completed newer
+writes, in-flight reads, pitch changes, retirement and resource replacement.
+Four compiled GPU mutants must fail. The varying-clear fixture admits only its
+expected optimized-clear-value performance warnings and rejects other validation
+messages/errors. Existing snapshot WARP controls and all 45 assertion-enabled
+Windows native CTests passed. Two snapshot mutant needles were scoped to their
+actual coherent-copy/retirement functions after the added prefetch helpers.
+
+The feature remains opt-in. Original author measurements retain their stated
+revision and local-change qualifications. Current native-title visuals, matched
+performance, minimum 30 FPS and interpreter removal remain open.
+
+## Eager submission after writes to listed surfaces (#326)
+
+The reusable fork implementation is at `abeb4200`, with the WARP fixture
+update at `a954e9d0`. Both are integrated in `combined` at `eb954250`.
+
+`rsx_cpu_surface.inc` gains `RSX_CPU_SURFACE_EAGER`, a list of up to four RSX
+surface offsets (same strict 1-8 hex digit parser as the prefetch list; none by
+default). `cpu_surface_capture` marks the batch when a recorded draw or clear
+records a bound listed render target with a nonzero pitch.
+`cpu_surface_flush_recorded` submits through the existing nonpresenting
+capacity path at the first draw boundary
+whose active targets exclude the listed surfaces, or at the idle pump. The
+decision checks the renderer service-thread owner and `render_frame` replay
+before it reads any renderer state, as the early submission for pending reads
+does; `render_frame` clears the mark after `cpu_surface_batch_submitted()`
+and before the prefetch refresh. Reads keep the coherent contract: each still
+needs the surface's current generation.
+
+In MotorStorm races the HDR exposure target (`02A30480`) is read once per frame
+10-20 ms after its write is recorded, so the batch with that write reaches the
+GPU before the read instead of when it arrives. `run.py
+--eager-surface-submit 1` lists it. `check_cpu_surface_eager.py` compiles the
+production block against a renderer model (16 mutants) and checks the capture,
+init, render_frame and flush wiring; `check_cpu_surface_prompt.py` covers the
+eager request on the shared flush hook. Visual parity in a driven race was
+checked on a local build; broader title coverage is open.
+
+## Job dispatch log and depth-guard ring (#327)
+
+The reusable depth guard is on own-fork branch `codex/spu-depth-ring` at
+`fefcd49a`. The depth limit and history are worker-local. An atomic flag
+retains the single process-wide report when multiple workers trip.
+
+Two costs every native job transfer paid, found by a line-level sample of
+MotorStorm's vehicle job:
+
+- `spu_channels.c`: `spu_indirect_branch` logged the first 16 and every 64th
+  transfer into a claimed resident job span (`[pm-jobmod] DISPATCH`). A lift hit
+  is every native job transfer, so a race wrote about 875,000 lines (117 MB) and
+  the SPU threads waited on stderr and the C runtime's stream lock. Lift hits
+  now log only with `SPU_JOBMOD_DISPATCH_LOG=1` (`run.py --jobmod-dispatch-log`);
+  unset or `0` is off and any other value aborts. Misses
+  (`resolver=MISS->interp`) remain enabled by default. Each worker owns its setting and separate hit and miss counters.
+- `spu_drain.c`: `spu_depth_guard` wrote its ring of recent drain sites, shared
+  by every SPU thread, on every lifted call, so its cache line moved between
+  threads constantly. The ring is now per thread (`SPU_THREAD_LOCAL`). It is
+  only read when `SPU_HOST_DEPTH_MAX` trips, and then lists the tripping
+  thread's own cycle.
+
+`check_spu_native_owned.py` runs the owned fixture with the switch unset, `0`,
+`1` and `2`. Behaviour is otherwise unchanged.
+
+## FACING and full polygon-offset identity (#320)
+
+The reusable port is own-fork modular commit
+`e6554ae0c44f7cf941989f0d8d357551fa1cb36e` in
+`robbe1912/ps3recomp`. It preserves the toolkit's distinct colour-input saturation
+and the curated decompiler's existing colour behavior. FACING input `0xE` uses
+`SV_IsFrontFace` with signed unit vectors; programs using other inputs retain
+byte-identical HLSL in the authored control. Winding remains part of the raster
+key with face culling disabled.
+
+Regression-first checks found that the proposal's packed polygon key erased a
+factor of `0.015625` and reduced units `65536` to `2047`. The correction carries
+both guest float bit patterns in a separate 64-bit key through draw capture,
+PSO lookup/storage, prefetch and merge equality. Rasterizer slope keeps its float
+bits. D24 integer bias uses nearest-integer conversion with halves away from
+zero and the signed 32-bit API limits; NaN units map to zero. Disabled fill
+has zero effective key. The recorded raw key keeps distinct guest values even
+when integer API conversion yields the same bias.
+
+Authored tests exercise twelve range/precision cases, exact key bits and cache
+separation, five compiled mutants and six wiring omission controls. Windows
+WARP executes four front/back checks under both windings and rejects zero
+FACING. Portable production-decompiler, plain-HLSL and UBSan descriptor/key
+controls pass on Linux. The checked Windows SDK suite passes 45 native tests;
+its capacity and shader-owner models include the new state member. Full SDK
+CI also exercises the two new test entry points. Original author native bridge
+observations remain original-revision evidence. Corrected native-title visual
+parity, performance, minimum 30 FPS and interpreter removal remain unverified.
+
+## Early submission for pending CPU reads (#321)
+
+The reusable correction is own-fork modular commit
+`1e31a4b299b56a56adbd92aabdae914275ac3414` on
+`codex/cpu-surface-early-submit`. It submits a recorded batch through the
+existing nonpresenting capacity path when a queued regular read overlaps a
+pending colour write. The draw-boundary and idle-pump hooks retain the existing
+readback, fence and completion path.
+
+Regression-first probes rejected recording-state access before renderer-owner
+validation and GPU-state access before that validation. The correction checks
+the atomic queue hint and renderer owner before recording state, then evaluates
+the flush decision before initialized/draw-count fields. The overlap selector
+uses the existing immutable environment cache.
+
+The curated capacity path remains serialized by default. `RSX_DRAIN_OVERLAP=1`
+retains pre-drain retirement and permits recording into the other upload parity
+while the submitted batch executes. Subsequent retirement still checks actual
+fence completion and device state. The toolkit already used overlapped capacity
+drains, so its port preserves that policy. Its snapshot-enabled transport keeps
+the snapshot and queued suffix behind their owned FIFO boundary in both early
+service and flush selection. The shared checker conditionally exercises that
+transport with fourteen mutants, while this byte-read interface has twelve.
+
+Actual extracted producer/consumer controls cover overlap, adjacency, queue
+tail/order, replay, foreign callers and empty batches. Four clients complete
+256 real threaded requests. Retirement controls cover both frame indices,
+serialized/overlapped modes and error paths. Full checked backend compilation,
+Windows checked SDK tests, authored WARP snapshot tests and portable Linux
+controls passed. Hosted SDK validation passed on Windows, Linux and macOS.
+All seven modular workflows and all nine subsequent combined workflows passed
+on the exact source, which is published on the existing own-fork `combined`
+branch at `1e31a4b299b56a56adbd92aabdae914275ac3414`.
+
+`run.py --cpu-surface-flush default|0|1` and
+`--drain-overlap default|0|1` admit and record the switches after inherited
+RSX diagnostics are cleared. Five actual-launcher tests cover defaults,
+both explicit values and independent mixed settings. Author measurements remain
+original-revision evidence. Corrected native visuals, matched performance,
+minimum 30 FPS and interpreter removal remain unverified.
+
+## Prompt CPU surface reads (#319)
+
+The reusable service was validated first on the existing
+`robbe1912/ps3recomp` branch `codex/cpu-surface-prompt`, commit
+`d5ce79edc73faf108bb21c168e4215df1b551358`, then integrated into `combined`.
+It tracks recorded colour-target guest ranges and admits early CPU reads only
+when every pending range is disjoint. Unknown extents and capacity overflow
+retain the queued request. Submission clears the pending set. Copies and
+completion signals execute outside the request lock, on the renderer owner.
+The queue-head hint uses C11 atomic publication. The toolkit additionally
+preserves its snapshot request and suffix until the owned FIFO boundary.
+This curated queue retains its existing byte-read interface.
+
+The authored serial fixture checks adjacency, overlap, splice order/tail,
+submission, replay, owner, disabled, overflow and unknown-height behaviour.
+Six compiled mutants must fail. The atomic declaration is checked
+at compile time. Four real clients enqueue 256 requests while the renderer
+services them, checking pending-write admission and exact completion.
+Windows and Linux source fixtures pass. The toolkit snapshot GPU fixture
+also passes on actual D3D12 WARP with thirteen source mutants rejected.
+The toolkit CI fixture follow-ups through
+`933e8e627ce802e29bd21c88c77e18575388c55c` repair retention metadata,
+GPU draw-height and CPU harness dependencies while preserving their checks.
+
+The launcher admits `--cpu-surface-prompt default|0|1` after clearing inherited
+`RSX_` options and records the explicit selection. Three actual-launcher
+fixture cases check default/off/on handling. Default uses backend policy,
+which enables prompt service. Value 0 selects batch-end/idle service.
+
+The author's three-pair timings and driving observations describe the
+original revision stacked on original #318. Corrected-head native visual
+parity, matched performance and minimum 30 FPS remain unverified.
+
+## Prepared vertex declarations and indexed reuse (#318)
+
+The shared vertex reader and two-way indexed strip/fan cache were validated
+first in the existing `robbe1912/ps3recomp` fork on
+`codex/vertex-prepared-declarations`, production commit
+`7bd90b7aebd35bc92f95663b33680bf97d45cc7f` and compiler-selection follow-up
+`aabf3afcb98707e088b37280a45d238a842b2a75`. Windows and Ubuntu modular jobs
+pass before integration into `combined`. The curated vertex reader/header
+are byte-identical to that implementation. The fork retains its older
+scalar D3D12 caller while this backend uses its existing prepared caller.
+
+Preparation decodes supported declarations once for up to eight active
+arrays. Element address resolution and guest-byte reads remain live.
+Full-width unknown attribute types retain the scalar decoder, and the
+immutable `VP_NOFREQ` launch setting has worker-local cache state. The
+callback-local 64-entry, two-way cache retains expanded vertex bytes only
+within one indexed strip/fan upload.
+
+Authored checks cover full-width unknown types, formats, frequency modes,
+defaults, declaration changes, live memory/mapping changes and eight
+simultaneous scalar/prepared callers. Six compiled mutants include the
+historical type truncation and shared selector state. Actual extracted
+indexed uploads preserve strip/fan bytes, restart, split/state changes and
+bounded fetch counts. The old three-entry cache fails that count control.
+Windows and Linux local tests pass. Author-provided three-pair performance
+measurements describe the original revision. No new matched native timing,
+minimum 30 FPS, graphics parity or interpreter-removal acceptance is claimed.
+
+## D3D12 fragment-program bound (#317)
+
+The fragment-program parser bound is 16 KiB throughout the D3D12 backend.
+The equivalent five-consumer toolkit correction was validated first on
+`robbe1912/ps3recomp` branch `codex/d3d12-fp-ucode-bound`, production commit
+`ab885a8ac4eb689ac1b3f62a59b502c579ef33ff`, with the self-contained fixture
+follow-up `8d66db96de044deb7502b1970e58d8388f8b46b6`. The final commit is
+integrated into `combined`. Its Windows and Ubuntu program-bound jobs pass.
+The combined texture-profile fixture at that checkpoint used an older lookup
+model. Follow-up `933e8e627ce802e29bd21c88c77e18575388c55c` aligns its
+retention metadata and fingerprint helpers and checks both retention modes.
+
+PR #317 applies the same bound to this curated backend's snapshot storage,
+copy and refresh, live hash, canonical prefetch, ordinary/native-depth HLSL
+translation, `FP_PICK`, b1 constant collection and native-depth texture mask.
+The 512-slot snapshot ring holds 8 MiB of program bytes. Its ownership and
+constant-refresh rules are preserved, as is the 143-constant draw-record cap
+and its explicit refusal. Metal's parser bound is outside this D3D12 change.
+
+`scripts/check_rsx_fp_snap_cache.py` extracts the actual capacity definition
+with the snapshot implementation. It exercises long snapshot/live identities,
+a constant edit beyond 4 KiB, exact-bound and over-bound END, zero-tail reuse,
+eight compiled mutants and nine consumer-bound omission controls.
+`scripts/fixtures/rsx_fp_program_bound.c.in` selectively imports the authored
+own-fork fixture for 4,112-byte/64-constant, 4,384-byte/64-constant and
+16-KiB programs. It adapts the curated constant-payload output argument and
+uses NOP padding at the maximum byte boundary to isolate that bound from the
+separate HLSL-output capacity. Windows compiles all three generated shaders
+with actual FXC `ps_5_0` at O3. The old 4-KiB bound fails the authored full-size
+control. Fixtures contain no captured guest programs.
+
+These checks establish parser, snapshot and host-shader compilation behavior.
+The author's original-head mud-rendering and race observations remain their
+reported evidence. Corrected-head native visual parity, matched performance,
+gameplay and stable 30 FPS remain unverified.
+
+## Prompt flip completion and latency state (#155)
+
+The opt-in GCM completion, FIFO hold and latency diagnostics are reconciled
+with current main directly on PR #316 following the maintainer's direction.
+Both completion switches and `FLIP_LAT` remain off by default. The SPURS
+publication wake-up selectively imports own-fork PR #4, combined merge
+`367c7e87b269ee7ae347a646ca2186d51dfa47c6`. Its selector cache is worker-local.
+
+A blocking state lock serializes wait generations, frame stamps, completion
+publication and delivery claims. Each completion stores a generation-tagged
+payload beside the notification bit, and resetting a wait invalidates older work. Status/frame flags use
+C11 atomics for their other cross-thread accesses. Guest callbacks execute
+after releasing the state lock. A returning or timed-out waiter can complete
+only its captured generation. The Win32 completion event and timestamp
+frequency initialize through `InitOnceExecuteOnce`.
+
+Latency timestamps and aggregates use an independent blocking lock. Reporting
+copies and resets one coherent window, then prints after unlocking. The
+frame-clock diagnostic timestamp is sampled only when diagnostics are enabled.
+
+The authored fixture compiles the actual GCM implementation on Windows and
+POSIX, using reserved virtual memory with authored control/ring contents. It
+covers four switch combinations, diagnostics off, FIFO holds, vblank bounds,
+beat fallback, a real producer and blocked Win32 waiter, replacement waits,
+128 cross-thread queued-generation replacements and concurrent diagnostic
+reporting. Eighteen compiled mutants must fail on both hosts. Windows adds a
+nineteenth control removing the publication doorbell. The queued-generation
+regression fails on the original PR in take/both modes. No guest bytes or
+generated guest code are included. Corrected native gameplay, visuals and
+matched frame-time performance remain unverified.
+
+## Texture mip chains (#97)
+
+Curated change to `libs/video/rsx_d3d12_backend.c` and
+`rsx_texture_fingerprint.h`. With `RSX_TEX_MIPS=1` (default 0) the VP texture
+upload creates 2D and cube resources with the guest's mip levels, clamped by
+`rsx_texture_mip_chain` to the halvings the dimensions allow. Each (face,
+level) is decoded at its own layout into the placed footprint
+`GetCopyableFootprints` assigns and copied to its own subresource; level 0
+keeps the historical row pitch. The level count joins the cache key and slot
+reuse check, and the retained identity widens to every uploaded level of each
+face (`rsx_texture_source_view_extend`). `srv_write_ex` views every level of a
+non-null resource, which is unchanged for single-level resources. Volumes stay
+single-level. Lower levels of a linear chain are read packed at their own width,
+as `rsx_texture_mip_chain` already describes; no hardware capture confirms that
+rule. `check_rsx_texture_mips.py` covers offsets, per-level decode, identity and
+selection with five mutants; the Windows GPU fixture adds a `mips-only` phase
+(per-subresource readback, per-level Load, lower-level mutation) and passes the
+volume `depth` argument `vp_upload_tex_slot_impl` gained in #307. No game input
+or generated code is included.
+
+
+Current-main integration preserves the verified texture lookup hint. Hint
+acceptance, its diagnostic verification scan and the ordinary scan all compare
+the normalized uploaded level count. `check_rsx_texture_profile.py` now checks
+a stale single-level hint beside a chained slot and rejects independently
+removing the level check from each path, under both retention modes and with
+hints disabled. Authored integrated DX12 allocation/upload/readback checks also
+pass on the RTX 3080 with zero validation messages. Guest linear-chain packing
+and matched native visuals remain unverified.
+
+## Padded job-module header identity (#300)
+
+The reusable header decoder, selector and diagnostic limit in
+`runtime/spu/spu_jobmod_identity.h` and its authored
+`runtime/spu/tests/test_spu_jobmod_identity.c`, retained locally as
+`scripts/fixtures/spu_jobmod_identity_threads.c.in`, come byte-identically from
+own-fork modular `codex/spu-jobmod-header-identity`, commit
+`a4e725d6f7eaa27fc5b2aff34fcb9bfae4712d38`, then fast-forwarded into `combined`.
+The curated contiguous-load matcher retains its existing policy-module
+integration and legacy all-byte fingerprint. Default-off
+`SPU_JOBMOD_HEADER_FNV=1` also offers the header-declared image-minus-trailer
+span when the link base matches, allowing padded loads to identify once.
+
+The selector cache and sixteen-message diagnostic cap are worker-local.
+Eight real simultaneous first callers verify distinct live cache/counter
+storage; shared-state mutants fail. The curated authored staging fixture
+retains eleven identity cases and four span/switch mutants, and compiles the
+same worker fixture with both shared-state mutants on Windows and POSIX.
+Native decoded-PCM parity and matched game performance remain unverified.
+No guest payload or generated code is included.
+
+## SPU EA alias page-cache publication (#155)
+
+Selective integration from own-fork PR #5, modular commit
+`db15251858f8f63e3ad579a77fcf4af259f112b2`, merged into `combined` as
+`3a512ae05aa21ae6bcbd538694b09ecb94cb71e5`. Follow-up writer serialization
+was authored on own-fork `codex/spu-alias-writer-serialization`, commit
+`16fc783e311deb5e50ed8cc4b4275eba99e3fc86`, then fast-forwarded into `combined`.
+`runtime/syscalls/spu_ea_alias.c` is byte-identical to that final revision.
+Cached 4 KiB page answers use acquire/release publication. An atomic range
+count publishes initialized, append-only records for mixed-page fallback.
+An internal blocking mutex serializes allocator and mapper registration;
+the curated mapper registers after releasing its allocator lock. Guest
+address lookups retain the lock-free atomic page/scan path.
+
+The own-fork authored fixture checks four concurrent readers, four concurrent
+writers, 6,746,751 reference-equivalent fixups and nine compiled mutants.
+Type assertions reject the original unsynchronized page/count declarations.
+Disabling the writer lock fails an actual held-lock registration control.
+Local MinGW, clang-cl and POSIX GCC checks and Ubuntu/Windows CI pass. The
+existing memory-capacity and allocation-exhaustion contract passes locally.
+Game performance remains unverified by this review. No guest bytes or
+generated code are included.
+
+## Fragment-program snapshot identity reuse (#155)
+
+Curated change to `libs/video/rsx_d3d12_backend.c` and `rsx_fp_decompiler.c/.h`.
+Each draw walked the same fragment program up to seven times: the snapshot
+refresh hashed it, `vp_fp_snap_take` sized and hashed it again and cleared all
+4 KiB of its slot, and `vp_get_fp_pso`, called once when compiling and once when
+replaying the draw, hashed and sized it each time. `vp_fp_snap_take` now copies
+the program once, hashes and sizes that copy in one walk
+(`rsx_fp_structural_hash_sized`, same hash), takes no ring slot when the copy
+does not verify, and clears only the tail a longer previous occupant left.
+`vp_get_fp_pso` uses a verified snapshot's stored hash and size instead of
+rehashing its bytes; a live read is still hashed. Hash values, PSO keys and
+`rsx_fp_snapshot_check` are unchanged. `check_rsx_fp_snap_cache.py` exercises the
+extracted production ring and PSO identity selection with authored bytecode and
+four mutants. No game input or generated code is included.
+
+## Read-once renderer switches (#155)
+
+Curated change to `libs/video`: new `rsx_env_once.h`, used by
+`rsx_d3d12_backend.c` and `cellGcmSys.c`. Diagnostic switches read on every
+draw, bind, upload, present or FIFO pass called `getenv`, which walks the whole
+environment block; a sampled native race put that walk (`strchr`) at 14.5% of
+the renderer thread. `rsx_env_once(name)` returns a private copy of the value
+at the first lookup, keyed by the name literal's address in a fixed lock-free
+table that falls back to `getenv` when full. Sites already behind a one-time
+guard, startup-only reads and the CPU surface files are unchanged. Every switch
+keeps its meaning; a value changed after launch is no longer seen.
+`check_rsx_env_once.py` tests the header (copies, first-lookup values,
+overflow, concurrent first lookups, three mutants) and audits the hot-path
+functions for raw reads. The triangle-capacity and VP-upload fixtures include
+the header. No game input or generated code is included.
+
+## Graphics review corrections (#271, #307)
+
+Own-fork branch `codex/fix-hammer-graphics` pins the reviewed graphics runtime
+and correction `57e64182`. The curated depth alias writer tracks colour clears
+across RT/MRT bindings and respects colour-then-depth clear ordering. Actual
+production-function controls cover masked draws, alias rejection after clears
+and subsequent depth writes. The same branch tests independent cube/volume
+flags for the volume integration. This feature-branch validation preserves the
+canonical fork renderer's separate feature history.
+
+## Spilled jump-table review correction (#259)
+
+Own-fork modular `b8e3ba93` and canonical combined `eae442fd` preserve
+one- and two-level spilled table bases while rejecting overlapping stack
+writes and incompatible store/reload widths. The curated lifter uses the same
+byte-range checks. Authored PowerPC vectors cover low-word, byte and partial
+doubleword overwrites, incompatible widths and an adjacent write, alongside
+the existing dispatch cases. No game input or generated guest code is included.
+
 ## Restored warm MFC engine lookup (issue 261)
 
 This selective integration restores own-fork modular `codex/mfc-context-cache`

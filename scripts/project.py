@@ -59,6 +59,7 @@ def main():
     b=sub.add_parser('build'); b.add_argument('--jobs',type=int,default=8); b.add_argument('--configure-only',action='store_true')
     b.add_argument('--optimize',action='store_true',help='Enable native O1 optimization with symbols and assertions retained')
     b.add_argument('--optimize-renderer',action='store_true',help='Use checked O2/automatic inlining for native video/FIFO sources; requires --optimize')
+    b.add_argument('--ps3recomp-dir',type=Path,help='Selected toolkit source (default: curated vendor runtime)')
     b.add_argument('--native-world-transforms',action=argparse.BooleanOptionalAction,default=True,
                    help='Bind verified native hierarchy work (default on; selected debug-US ELF only)')
     b.add_argument('--native-job-wait',action=argparse.BooleanOptionalAction,default=True,
@@ -69,6 +70,7 @@ def main():
                    help='Bind verified PCM cubic DSP (default off; explicit runtime reference/shadow/native mode)')
     b.add_argument('--native-particle-thresholds',action=argparse.BooleanOptionalAction,default=False,
                    help='Bind the verified particle scan (default off; runtime reference/shadow/native policy remains explicit)')
+    b.add_argument('--menu-boot',action=argparse.BooleanOptionalAction,default=True,help='Boot supported original targets directly to PLAY')
     g=sub.add_parser('generate'); g.add_argument('--stage',choices=['ppu','spu'],required=True); g.add_argument('--jobs',type=int,default=8)
     sub.add_parser('check')
     args=ap.parse_args()
@@ -110,13 +112,20 @@ def main():
         print('Generated output is private and ignored. See docs/BUILDING.md for additional module requirements.'); return
     if args.cmd=='build':
         if not 1<=args.jobs<=8: raise SystemExit('Use 1..8 jobs to bound compiler memory')
+        source_root=(args.ps3recomp_dir or ROOT/'vendor/ps3recomp').resolve()
+        from runtime_profile import runtime_identity
+        runtime_record=runtime_identity(source_root)
         if os.name=='nt':
             # Required discipline before relinking. No matching process is harmless.
             subprocess.run(['taskkill','/F','/IM','ms1_recomp.exe'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         env=build_environment(); binary=ROOT/'build/native'
         command=['cmake','-S',ROOT,'-B',binary,'-G','Ninja','-DCMAKE_BUILD_TYPE=Debug','-DPORT_CPP_NONLOCAL_JUMPS=ON',f'-DRECOMP_DIR={c["generated"]/"ppu"}',f'-DSPU_DIR={c["generated"]/"spu"}',f'-DPS3RECOMP_FFMPEG_ROOT={c["ffmpeg"]}',f'-DPORT_PRIVATE_KEYS_DIR={c.get("keys",ROOT/"game/private_keys")}']
         if 'MV_CLANG' in env: command.extend([f'-DCMAKE_C_COMPILER={env["MV_CLANG"]}',f'-DCMAKE_CXX_COMPILER={env["MV_CLANG"]}'])
+        command.append(f'-DPS3RECOMP_DIR={source_root}')
         command.append(f'-DPORT_OPTIMIZE_NATIVE={"ON" if args.optimize else "OFF"}')
+        from native_game_binding import PRODUCTION
+        menu_boot = args.menu_boot and hashlib.sha256(c['elf'].read_bytes()).hexdigest() == PRODUCTION.elf_sha256
+        command.append(f'-DPORT_NATIVE_MENU_BOOT={"ON" if menu_boot else "OFF"}')
         command.append(f'-DPORT_OPTIMIZE_RENDERER={"ON" if args.optimize_renderer else "OFF"}')
         command.extend([f'-DPORT_NATIVE_WORLD_TRANSFORMS={"ON" if args.native_world_transforms else "OFF"}',
                         f'-DPORT_NATIVE_JOB_WAIT={"ON" if args.native_job_wait else "OFF"}',
@@ -128,10 +137,14 @@ def main():
         logged_run(command,logs/'configure.log',env=env)
         if args.configure_only: return
         logged_run(['cmake','--build',binary,'--parallel',args.jobs],logs/'build.log',env=env)
+        if runtime_identity(source_root)!=runtime_record:
+            raise SystemExit('Runtime capability source or revision changed during the build; rebuild before running')
         exe=binary/('ms1_recomp.exe' if os.name=='nt' else 'ms1_recomp')
         identity={'path':str(exe),'sha256':hashlib.sha256(exe.read_bytes()).hexdigest(),'bytes':exe.stat().st_size,'elf_sha256':hashlib.sha256(c['elf'].read_bytes()).hexdigest(),'ppu_tree':str(c['generated']/'ppu'),'spu_tree':str(c['generated']/'spu'),'logs':str(logs)}
         identity.update(build_type='Debug',optimized_checked=args.optimize,native_world_transforms=args.native_world_transforms,
                         native_job_wait=args.native_job_wait)
+        identity.update(runtime_record)
+        identity['menu_boot']=menu_boot
         identity['native_visibility']=args.native_visibility
         identity['native_pcm_cubic']=args.native_pcm_cubic
         identity['native_particle_thresholds']=args.native_particle_thresholds
@@ -142,7 +155,7 @@ def main():
         if args.native_particle_thresholds:
             identity['native_particle_binding']=json.loads((binary/'native-particle-input/identity.json').read_text())
             identity['native_particle_binding_generator_sha256']=hashlib.sha256((ROOT/'scripts/native_particle_binding.py').read_bytes()).hexdigest()
-        if args.native_world_transforms or args.native_job_wait or args.native_visibility or args.native_pcm_cubic:
+        if menu_boot or args.native_world_transforms or args.native_job_wait or args.native_visibility or args.native_pcm_cubic:
             identity['native_world_binding']=json.loads((binary/'native-world-binding.json').read_text())
             identity['native_world_sources_sha256']={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted((ROOT/'src/motorstorm').glob('*')) if p.is_file()}
