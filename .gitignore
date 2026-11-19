@@ -1,6 +1,7 @@
 # Closed root allowlist: new output directories are private unless reviewed.
 /*
 !/.gitignore
+!/.recomp.json
 !/README.md
 !/AGENTS.md
 !/LICENSE

@@ -9,3 +9,9 @@ Start with [setup and build](docs/BUILDING.md), then [running and capturing](doc
 [Asset extraction and reconstruction](docs/assets/README.md) records reusable texture, mesh and material contracts, with a [MotorStorm worked example](docs/assets/MOTORSTORM.md) and notes for a future Rust implementation.
 
 See [vendor provenance and licenses](docs/VENDOR.md) and [publication audit](docs/REPOSITORY.md). Source licensing does not grant rights to the game or guarantee immunity from legal claims. No affiliation with Sony or the original developers.
+
+## Project metadata
+
+Project metadata for directories and tools lives in [`.recomp.json`](.recomp.json),
+following the [recomp.board specification](https://recomp.fyi/spec). Keep it
+updated when the project status, supported game version or target platforms change.

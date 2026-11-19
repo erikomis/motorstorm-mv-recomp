@@ -11,7 +11,7 @@ except ImportError:
     raise SystemExit('Workflow validation requires PyYAML: python -m pip install -r requirements.txt')
 
 ROOT = Path(__file__).resolve().parents[1]
-TOP = {'.gitignore', 'README.md', 'AGENTS.md', 'LICENSE', 'CMakeLists.txt', 'requirements.txt'}
+TOP = {'.gitignore', '.recomp.json', 'README.md', 'AGENTS.md', 'LICENSE', 'CMakeLists.txt', 'requirements.txt'}
 DIRS = {'src', 'scripts', 'config', 'docs', 'vendor'}
 BAD = {'.elf','.self','.prx','.sprx','.bin','.edat','.rpk','.dat','.cnk','.psarc','.pkg','.sfo',
        '.exe','.dll','.pdb','.obj','.lib','.ogg','.mp3','.at3','.wav','.f32','.mp4','.pam',
@@ -120,6 +120,9 @@ def main():
         assert has_key((','.join(hex(x) for x in synthetic)).encode(),digest)
         assert has_key((','.join('0x%02x'%x for x in synthetic)).encode(),digest)
         assert problem('src/main.cpp',b'int main() {}') is None
+        assert problem('.recomp.json', b'{"game": "MotorStorm"}') is None
+        assert problem('.recomp.json', b'\x7fELFtest')
+        assert problem('other.json', b'{}')
         print('PASS: payload/generated-code/private-key rejection cases')
         return
     count=0;errors=[]
